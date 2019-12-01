@@ -25,7 +25,7 @@ QUIT="QUIT\n"
 
 
 HOST = "127.0.0.1"
-PORT = 4646
+PORT = 4444
 
 BUFSIZE = 1024
 ADDR = (HOST, PORT)
@@ -54,6 +54,7 @@ class Window(QWidget):
         self.clients_usernames = []
         self.signals = HelperSignals()
         self.connection_status = False
+        self.current_user = None
         self.chat_dictionary = {}
 
         self.connect_server()
@@ -119,28 +120,34 @@ class Window(QWidget):
     def user_on_click(self):
         
         if self.first_control:
-            print('debugfirst')
-            self.current_user = self.users_list.currentItem().text() + "\n"
-            messages = [self.chatlist.item(i).text() for i in range(self.chatlist.count())]
-            self.chat_dictionary[self.current_user] = messages
-            self.first_control = False
-            print('debugfirst2')
-        else:
-            print('debugclear')
-            messages = [self.chatlist.item(i).text() for i in range(self.chatlist.count())]
-            self.chat_dictionary[self.current_user] = messages
-            self.current_user = self.users_list.currentItem().text() + "\n"
-            self.chatlist.clear()
-            if self.current_user in list(self.chat_dictionary.keys()):
-                for i in self.chat_dictionary[self.current_user]:
+            self.current_user = self.users_list.currentItem().text()
+            # print("current",self.current_user)
+            
+            if self.is_user_recorded(self.current_user):
+                print(self.chat_dictionary[self.current_user])
+
+            if not self.is_user_recorded(self.current_user):
+                self.create_record(self.current_user)
+
+            for i in self.chat_dictionary[self.current_user]:
                     self.chatlist.addItem(i)
-            else:
-                self.chatlist.clear()
+            self.first_control = False
+        else:
+            messages = [self.chatlist.item(i).text() for i in range(self.chatlist.count())]
+            self.chat_dictionary[self.current_user] = messages
+            self.current_user = self.users_list.currentItem().text()
+            self.chatlist.clear()
+            if not self.is_user_recorded(self.current_user):
+                self.create_record(self.current_user)
+
+            for i in self.chat_dictionary[self.current_user]:
+                    self.chatlist.addItem(i)
 
 
         #messages = [self.chatlist.item(i).text() for i in range(self.chatlist.count())]
 
-
+    def create_record(self,user):
+        self.chat_dictionary[user] = []
 
     def set_frames(self):
         self.top_left_frame    = QFrame()
@@ -210,16 +217,39 @@ class Window(QWidget):
 
 
     def write_list(self,person,message):
-        users = self.chat_dictionary.keys()
-        if person in users:
-            chats = self.chat_dictionary[person]
-            chats.append(message)
-            self.chat_dictionary[person] = chats
+        if self.is_user_recorded(person):
+            self.update_record(person,message)
+            if self.is_window_active(person):
+                self.chatlist.addItem(person+message)
         else:
-            self.chat_dictionary[person] = message
-            print(self.chat_dictionary)
-        self.chatlist.addItem(str(person)+str(message))
+            self.chat_dictionary[person] = [person + message]
 
+
+        # users = self.chat_dictionary.keys()
+        # if person in users:
+        #     chats = self.chat_dictionary[person]
+        #     chats.append(message)
+        #     self.chat_dictionary[person] = chats
+        # else:
+        #     self.chat_dictionary[person] = message
+        #     print(self.chat_dictionary)
+        # self.chatlist.addItem(str(person)+str(message))
+
+    def update_record(self,user,msg):
+        value = self.chat_dictionary[user]
+        print(type(value),value)
+        value.append(user+msg)
+        self.chat_dictionary[user] = value
+
+    def is_window_active(self,user):
+        return self.current_user == user
+
+    def is_user_recorded(self,user):
+        users = self.chat_dictionary.keys()
+        if user in users:
+            return True
+        else:
+            return False
 
     def send_message(self):
         text = self.message_text.text()
@@ -236,7 +266,8 @@ class Window(QWidget):
             packet = PROTOCOL+FROM+TO+TEXT
             print(packet)
             self.client_socket.send(bytes(packet, "utf8"))
-            self.write_list('You',TEXT)
+            self.chatlist.addItem('You: '+TEXT)
+            # burası dictionary'e ekleme şeklinde olmali
             self.message_text.setText('')
 
 
@@ -276,9 +307,6 @@ class Handler(QRunnable):
             print("handler works2")
             received_message = self.connection.recv(BUFSIZE).decode("utf8")
             message = received_message.split("\n")
-            # print(received_message)
-            # print(message)
-            # print(message[0])
 
 
             if message[0] == "INFO":
@@ -289,20 +317,14 @@ class Handler(QRunnable):
 
                 self.signals.update_usernames.emit(self.clients)
 
-                    
-
 
             if message[0] == "MESSAGE":
+
                 FROM = message[1]
                 TO = message[2]
                 MSG = ' '.join(message[3:])
+                print(type(MSG),MSG)
                 self.signals.chat_message.emit(str(FROM),str(MSG))
-
-    def create_chat_list(self):
-        pass
-
-
-
 
 
 

@@ -82,7 +82,7 @@ addresses = {}
 
 
 HOST = ''
-PORT = 4646
+PORT = 4444
 BUFSIZ = 1024
 ADDR = (HOST, PORT)
 
