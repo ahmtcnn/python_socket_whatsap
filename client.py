@@ -23,9 +23,12 @@ from socket import AF_INET, socket, SOCK_STREAM
 MESSAGE="MESSAGE\n"
 QUIT="QUIT\n"
 
+# To
+
+
 
 HOST = "127.0.0.1"
-PORT = 4444
+PORT = 6161
 
 BUFSIZE = 1024
 ADDR = (HOST, PORT)
@@ -44,12 +47,14 @@ class App(QMainWindow):
         self.window = Window()
         self.setCentralWidget(self.window)
         self.show()
+    def closeEvent(self, event):
+        self.window.quit()
 
 
 class Window(QWidget):
     def __init__(self):
         super().__init__()
-        self.username = ""
+        self.username = None
         self.first_control = True
         self.clients_usernames = []
         self.signals = HelperSignals()
@@ -59,11 +64,6 @@ class Window(QWidget):
 
         self.connect_server()
         self.threadpool = QThreadPool()
-
-
-        self._red = QtGui.QBrush(QtCore.Qt.red)
-        self._green = QtGui.QBrush(QtCore.Qt.green)
-
 
         
         self.init_ui()
@@ -109,6 +109,18 @@ class Window(QWidget):
         self.chatlist.addItem('test')
         self.chatlist.clear()
 
+
+    def quit(self):
+        if self.username != None:
+            self.username = "ANONYMOUS\n"
+
+        FROM = self.username
+        TO = "SERVER\n"
+        PROTOCOL = QUIT
+        message = PROTOCOL+FROM+TO+MESSAGE
+        print(message)
+        self.client_socket.send(bytes(message,'utf8'))
+        print("byebye")
 
     def set_user_list(self):
         self.users_list = QListWidget(self.bottom_left_frame)
@@ -190,7 +202,13 @@ class Window(QWidget):
         # control eklenecek
         if username == "":
             pass
-        self.client_socket.send(bytes(username, "utf8"))
+        PROTOCOL = "USERNAME\n"
+        FROM="ANONYMOUS\n"
+        TO="SERVER\n"
+        MESSAGE=username
+        message = PROTOCOL+FROM+TO+MESSAGE
+        print(message)
+        self.client_socket.send(bytes(message, "utf8"))
 
         validation = self.client_socket.recv(BUFSIZE).decode("utf8")
         if validation == "True":
@@ -209,7 +227,7 @@ class Window(QWidget):
         self.users_list.clear()
 
         for i in usernames:
-            if i not in self.clients_usernames:
+            if i not in self.clients_usernames and i  != self.username:
                 self.users_list.addItem(i)
 
     # def write_list(self,person,message):

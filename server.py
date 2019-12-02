@@ -25,15 +25,25 @@ def handle_client(client):  # Takes client socket as argument.
     """Handles a single client connection."""
     while True:
         usernames = clients.values()
-        username = client.recv(BUFSIZ).decode("utf8")
-        if username not in usernames:
-            clients[client] = username
-            client.send(bytes('True', "utf8"))
-            print(username)
-            #print(username)
+        received = client.recv(BUFSIZ).decode("utf8")
+        print(received)
+        message = received.split("\n")
+        if message[0] == 'USERNAME':
+            username = message[3]
+            if username not in usernames:
+                clients[client] = username
+                client.send(bytes('True', "utf8"))
+                print(username)
+                #print(username)
+                break
+            else:
+                client.send(bytes('False', "utf8"))
+        elif message[0] == 'QUIT':
+            print("quitted")
+            client.close()
+            del addresses[client]
             break
-        else:
-            client.send(bytes('False', "utf8"))
+
     usernames = "-".join(list(clients.values()))
     usernamelist_message = PROTOCOL+FROM+TO+str(usernames)
     broadcast(usernamelist_message)
@@ -43,8 +53,13 @@ def handle_client(client):  # Takes client socket as argument.
         received = msg.split("\n")
 
         if received[0] == "MESSAGE":
-            print(received)
             send_to_username(msg)
+
+        if received[0] == 'QUIT':
+            print("quitted")
+            client.close()
+            del addresses[client]
+            break
 
         # if msg != bytes("{quit}", "utf8"):
         #     broadcast(msg, name+": ")
@@ -82,7 +97,7 @@ addresses = {}
 
 
 HOST = ''
-PORT = 4444
+PORT = 6161
 BUFSIZ = 1024
 ADDR = (HOST, PORT)
 
