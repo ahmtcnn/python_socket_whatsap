@@ -39,7 +39,7 @@ def handle_client(client):  # Takes client socket as argument.
             else:
                 client.send(bytes('False', "utf8"))
         elif message[0] == 'QUIT':
-            print("quitted")
+            print(clients[client],"USER QUITTED!")
             client.close()
             del addresses[client]
             break
@@ -56,19 +56,10 @@ def handle_client(client):  # Takes client socket as argument.
             send_to_username(msg)
 
         if received[0] == 'QUIT':
-            print("quitted")
+            print(clients[client],"USER QUITTED!")
             client.close()
             del addresses[client]
             break
-
-        # if msg != bytes("{quit}", "utf8"):
-        #     broadcast(msg, name+": ")
-        # else:
-        #     client.send(bytes("{quit}", "utf8"))
-        #     client.close()
-        #     del clients[client]
-        #     broadcast(bytes("%s has left the chat." % name, "utf8"))
-        #     break
 
 
 def broadcast(msg):  # prefix is for name identification.
@@ -82,12 +73,9 @@ def broadcast(msg):  # prefix is for name identification.
 def send_to_username(message):
     received = message.split("\n")
     TO = received[2]
-
     key_list = list(clients.keys()) 
     val_list = list(clients.values())
-
     TO_CLİENT = key_list[val_list.index(TO)]
-
     TO_CLİENT.send(bytes(message, "utf8"))
 
 

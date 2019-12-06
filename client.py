@@ -1,37 +1,27 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget,QMainWindow,QProgressBar,QPushButton,QCheckBox,QHeaderView,QAbstractScrollArea,QMessageBox,QAction,QTableWidgetItem,QTableWidget, QLineEdit, QMessageBox,QGroupBox,QVBoxLayout,QMenuBar,QTabWidget,QLabel,QHBoxLayout,QFrame,QSplitter,QStyleFactory,QListWidget
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import pyqtSlot,Qt
-import time
-import threading
-import psutil
-from PyQt5 import QtGui
-from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QApplication, QWidget,QMainWindow,QPushButton,QCheckBox,QHeaderView,QMessageBox, QLineEdit,QLabel,QHBoxLayout,QFrame,QSplitter,QListWidget
 from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
-import psutil
-import time
-import validators
 from urllib.parse import urlparse,urljoin
-
 import threading
 from socket import AF_INET, socket, SOCK_STREAM
+import sys
+import validators
 
-# Protocol
-MESSAGE="MESSAGE\n"
-QUIT="QUIT\n"
+# PROTOCOLS
+USERNAME    ="USERNAME\n"
+MESSAGE     ="MESSAGE\n"
+QUIT        ="QUIT\n"
 
-# To
+ANONYMOUS   ="ANONYMOUS\n"
+SERVER      ="SERVER\n"
 
-
-
-HOST = "127.0.0.1"
-PORT = 6161
+HOST    = ""
+PORT    = 6161
+ADDR    = (HOST, PORT)
 
 BUFSIZE = 1024
-ADDR = (HOST, PORT)
+
 
 class App(QMainWindow):
 
@@ -39,7 +29,6 @@ class App(QMainWindow):
         super().__init__()
         self.title = 'Whatsap'
         self.setFixedSize(500  , 300)
-
         self.initUI()
         
     def initUI(self):
@@ -47,6 +36,8 @@ class App(QMainWindow):
         self.window = Window()
         self.setCentralWidget(self.window)
         self.show()
+
+    # Close event overrided - Pencere kapandığında socketi kapatmamız lazım
     def closeEvent(self, event):
         self.window.quit()
 
@@ -54,18 +45,14 @@ class App(QMainWindow):
 class Window(QWidget):
     def __init__(self):
         super().__init__()
-        self.username = None
-        self.first_control = True
-        self.clients_usernames = []
-        self.signals = HelperSignals()
-        self.connection_status = False
-        self.current_user = None
-        self.chat_dictionary = {}
+        self.username           = None
+        self.first_control      = True
+        self.clients_usernames  = []
+        self.current_user       = None
+        self.chat_dictionary    = {}
+        self.threadpool         = QThreadPool()
 
         self.connect_server()
-        self.threadpool = QThreadPool()
-
-        
         self.init_ui()
         
 
@@ -75,31 +62,30 @@ class Window(QWidget):
         self.set_frames()
         self.set_label_and_buttons()
         self.set_user_list()
-        
-
-
-        #self.create_chat_list('test')
         self.show()
 
 
+    # Setting up some UI
     def set_label_and_buttons(self):
+        # Username edittext
         self.username_text = QLineEdit(self.top_left_frame)
         self.username_text.setPlaceholderText("Username") 
         self.username_text.move(15, 20)
         self.username_text.resize(100,15)
 
+        # Join button to join chat
         self.join_button = QPushButton('Katıl', self.top_left_frame)
         self.join_button.clicked.connect(self.set_username)
         self.join_button.move(120,20)
         self.join_button.resize(50,15)
 
-        # Chat için text
+        # Message edittext to write to chat
         self.message_text = QLineEdit(self.right_frame)
         self.message_text.setPlaceholderText("type_here") 
         self.message_text.move(10, 220)
         self.message_text.resize(200,40)
 
-
+        # Send button to send message
         self.send_button = QPushButton('Gonder', self.right_frame)
         self.send_button.clicked.connect(self.send_message)
         self.send_button.move(220,220)
@@ -110,30 +96,30 @@ class Window(QWidget):
         self.chatlist.clear()
 
 
+    # When quiting from server - This works when user close the window
     def quit(self):
         if self.username != None:
             self.username = "ANONYMOUS\n"
 
-        FROM = self.username
-        TO = "SERVER\n"
-        PROTOCOL = QUIT
-        message = PROTOCOL+FROM+TO+MESSAGE
-        print(message)
-        self.client_socket.send(bytes(message,'utf8'))
-        print("byebye")
+        FROM        = self.username
+        TO          = SERVER
+        PROTOCOL    = QUIT
+        MESSAGE     = PROTOCOL+FROM+TO+MESSAGE
+        self.client_socket.send(bytes(MESSAGE,'utf8'))
+        print("Connection Closed!")
+
 
     def set_user_list(self):
         self.users_list = QListWidget(self.bottom_left_frame)
-        self.users_list.setMinimumSize(10,15)
-        # self.chat = QListWidget()
-        # self.right_frame.addWidget(self.chat)
         self.users_list.itemClicked.connect(self.user_on_click)
+        self.users_list.setMinimumSize(10,15)
+        
 
     def user_on_click(self):
         
+        # If this is first click, we need to store current user
         if self.first_control:
             self.current_user = self.users_list.currentItem().text()
-            # print("current",self.current_user)
             
             if self.is_user_recorded(self.current_user):
                 print(self.chat_dictionary[self.current_user])
@@ -149,6 +135,7 @@ class Window(QWidget):
             self.chat_dictionary[self.current_user] = messages
             self.current_user = self.users_list.currentItem().text()
             self.chatlist.clear()
+
             if not self.is_user_recorded(self.current_user):
                 self.create_record(self.current_user)
 
@@ -156,11 +143,12 @@ class Window(QWidget):
                     self.chatlist.addItem(i)
 
 
-        #messages = [self.chatlist.item(i).text() for i in range(self.chatlist.count())]
-
+    # Create user record
     def create_record(self,user):
         self.chat_dictionary[user] = []
 
+
+    # Setting frame for three partial
     def set_frames(self):
         self.top_left_frame    = QFrame()
         self.top_left_frame.setFrameShape(QFrame.StyledPanel)
@@ -184,56 +172,57 @@ class Window(QWidget):
 
         self.hbox.addWidget(self.splitter2)
 
+
+    # Connecting server before everything
     def connect_server(self):
 
         self.client_socket = socket(AF_INET, SOCK_STREAM)
         try:
             self.client_socket.connect(ADDR)
-        except:
-            print("Counldn't connect to server")
+        except Exception as e:
+            print("Couldn't connect to server : ",e)
         else:
-            self.connection_status = True
-            #status bara yazdırılacak
-            msg = self.client_socket.recv(BUFSIZE).decode("utf8")
-            print(msg)
+            connection_message = self.client_socket.recv(BUFSIZE).decode("utf8")
+            print(connection_message)
     
+    # Setting username and waiting for it's validation. After that, start message receive handler
     def set_username(self):
         username = self.username_text.text()
         # control eklenecek
         if username == "":
-            pass
-        PROTOCOL = "USERNAME\n"
-        FROM="ANONYMOUS\n"
-        TO="SERVER\n"
-        MESSAGE=username
-        message = PROTOCOL+FROM+TO+MESSAGE
-        print(message)
-        self.client_socket.send(bytes(message, "utf8"))
+            return
+
+        PROTOCOL    = USERNAME
+        FROM        = ANONYMOUS
+        TO          = SERVER
+        TEXT        = username
+        PACKET      = PROTOCOL+FROM+TO+TEXT
+
+        self.client_socket.send(bytes(PACKET, "utf8"))
 
         validation = self.client_socket.recv(BUFSIZE).decode("utf8")
         if validation == "True":
-            #self.is_username_valid = True
             self.disable_options()
             self.username = username
             self.handler = Handler(self.client_socket)
             self.handler.signals.update_usernames.connect(self.update_username_list)
             self.handler.signals.chat_message.connect(self.write_list)
             self.threadpool.start(self.handler)
-        else:
-            pass
-            #self.is_username_valid = False
 
+
+    # Disabling join options when username validated
+    def disable_options(self):
+        self.username_text.setDisabled(True)
+        self.join_button.setDisabled(True)
+
+    # Updating username list when they recevied
     def update_username_list(self,usernames):
         self.users_list.clear()
-
         for i in usernames:
             if i not in self.clients_usernames and i  != self.username:
                 self.users_list.addItem(i)
 
-    # def write_list(self,person,message):
-    #     self.chatlist.addItem(str(person)+str(message))
-
-
+    # Write chat list
     def write_list(self,person,message):
         if self.is_user_recorded(person):
             self.update_record(person,message)
@@ -242,26 +231,18 @@ class Window(QWidget):
         else:
             self.chat_dictionary[person] = [person + message]
 
-
-        # users = self.chat_dictionary.keys()
-        # if person in users:
-        #     chats = self.chat_dictionary[person]
-        #     chats.append(message)
-        #     self.chat_dictionary[person] = chats
-        # else:
-        #     self.chat_dictionary[person] = message
-        #     print(self.chat_dictionary)
-        # self.chatlist.addItem(str(person)+str(message))
-
+    # If message came in and it's not in active window, update it from backround
     def update_record(self,user,msg):
         value = self.chat_dictionary[user]
         print(type(value),value)
         value.append(user+msg)
         self.chat_dictionary[user] = value
 
+    # Return True if window is active
     def is_window_active(self,user):
         return self.current_user == user
 
+    # Return True if user is recorded
     def is_user_recorded(self,user):
         users = self.chat_dictionary.keys()
         if user in users:
@@ -269,34 +250,24 @@ class Window(QWidget):
         else:
             return False
 
+    # Sending message
     def send_message(self):
         text = self.message_text.text()
         if text != "" and text!= None:
-            PROTOCOL=MESSAGE
-            FROM=self.username+"\n"
-            print(self.username)
             if self.users_list.currentItem() == None:
                 print("Please select user to send message")
                 return
-            TO=self.current_user + "\n"
 
-            TEXT = ": "+text
-            packet = PROTOCOL+FROM+TO+TEXT
-            print(packet)
-            self.client_socket.send(bytes(packet, "utf8"))
-            self.chatlist.addItem('You: '+TEXT)
-            # burası dictionary'e ekleme şeklinde olmali
-            self.message_text.setText('')
+            PROTOCOL    = MESSAGE
+            FROM        = self.username+"\n"
+            TO          = self.current_user + "\n"
+            TEXT        = ": "+text
+            PACKET      = PROTOCOL+FROM+TO+TEXT
 
-
-    def disable_options(self):
-        self.username_text.setDisabled(True)
-        self.join_button.setDisabled(True)
-
-
-
-class HelperSignals(QObject):
-    create_list = pyqtSignal(str)
+            self.client_socket.send(bytes(PACKET, "utf8"))
+            self.chatlist.addItem('You'+TEXT)
+            self.message_text.clear()
+            print("MESSAGE SENDED")
 
 
 
@@ -304,26 +275,24 @@ class HandlerSignals(QObject):
     
     chat_message   = pyqtSignal(str,str)
     update_usernames = pyqtSignal(list)
-    #info_box = pyqtSignal(str)
 
 
 class Handler(QRunnable):
     def __init__(self,connection):
         super(Handler,self).__init__()
-        self.connection = connection
-        self.signals = HandlerSignals()
-        self.chatlist = {}
-        self.clients = []
+        self.connection     = connection
+        self.signals        = HandlerSignals()
+        self.chatlist       = {}
+        self.clients        = []
         
     @pyqtSlot()    
     def run(self):
-        print("handler works")
         self.recv_messages()
 
     def recv_messages(self):
         while True:
-            print("handler works2")
             received_message = self.connection.recv(BUFSIZE).decode("utf8")
+            print("INCOMING MESSAGE")
             message = received_message.split("\n")
 
 
@@ -332,7 +301,6 @@ class Handler(QRunnable):
                 self.clients.clear()
                 for u in usernames:
                     self.clients.append(u)
-
                 self.signals.update_usernames.emit(self.clients)
 
 
@@ -341,12 +309,7 @@ class Handler(QRunnable):
                 FROM = message[1]
                 TO = message[2]
                 MSG = ' '.join(message[3:])
-                print(type(MSG),MSG)
                 self.signals.chat_message.emit(str(FROM),str(MSG))
-
-
-
-
 
 
 if __name__ == '__main__':
