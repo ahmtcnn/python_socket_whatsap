@@ -6,7 +6,6 @@ from urllib.parse import urlparse,urljoin
 import threading
 from socket import AF_INET, socket, SOCK_STREAM
 import sys
-import validators
 
 # PROTOCOLS
 USERNAME    ="USERNAME\n"
